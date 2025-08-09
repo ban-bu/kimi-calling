@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>群语音通话</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="login-screen" class="screen">
+        <div class="login-container">
+            <h1>群语音通话</h1>
+            <input type="text" id="username" placeholder="输入您的昵称" maxlength="20">
+            <input type="text" id="roomId" placeholder="输入房间ID" maxlength="20">
+            <button onclick="joinRoom()">加入房间</button>
+        </div>
+    </div>
+
+    <div id="call-screen" class="screen hidden">
+        <div class="header">
+            <h2>房间: <span id="current-room"></span></h2>
+            <button onclick="leaveRoom()" class="leave-btn">离开房间</button>
+        </div>
+        
+        <div class="participants-container">
+            <div id="participants-grid" class="participants-grid"></div>
+        </div>
+        
+        <div class="controls">
+            <button id="mute-btn" onclick="toggleMute()" class="control-btn">
+                <span id="mute-icon">🎤</span>
+                <span>静音</span>
+            </button>
+            <button onclick="shareRoom()" class="control-btn">
+                <span>🔗</span>
+                <span>分享房间</span>
+            </button>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

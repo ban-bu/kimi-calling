@@ -8,7 +8,10 @@ let roomId;
 const configuration = {
     iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun3.l.google.com:19302' },
+        { urls: 'stun:stun4.l.google.com:19302' }
     ]
 };
 
@@ -52,10 +55,25 @@ function leaveRoom() {
 }
 
 function initializeSocket() {
-    socket = io();
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const socketUrl = `${protocol}//${window.location.host}`;
+    
+    socket = io(socketUrl, {
+        transports: ['websocket', 'polling'],
+        timeout: 10000,
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000
+    });
 
     socket.on('connect', () => {
+        console.log('Socket connected:', socket.id);
         socket.emit('join-room', { roomId, username });
+    });
+
+    socket.on('connect_error', (error) => {
+        console.error('Socket连接错误:', error);
+        alert('连接服务器失败，请刷新页面重试');
     });
 
     socket.on('room-users', (users) => {
@@ -67,11 +85,13 @@ function initializeSocket() {
     });
 
     socket.on('user-joined', ({ userId, username }) => {
+        console.log('用户加入:', username, userId);
         createPeerConnection(userId, username);
         createOffer(userId);
     });
 
     socket.on('user-left', ({ userId, username }) => {
+        console.log('用户离开:', username, userId);
         removeParticipant(userId);
         if (peers[userId]) {
             peers[userId].connection.close();
@@ -121,19 +141,24 @@ function initializeSocket() {
 
 async function initializeMedia() {
     try {
-        localStream = await navigator.mediaDevices.getUserMedia({ 
+        const constraints = {
             audio: {
                 echoCancellation: true,
                 noiseSuppression: true,
-                autoGainControl: true
+                autoGainControl: true,
+                sampleRate: 44100,
+                channelCount: 1
             },
-            video: false 
-        });
+            video: false
+        };
         
+        localStream = await navigator.mediaDevices.getUserMedia(constraints);
+        console.log('媒体流获取成功');
         addParticipant(socket.id, username, localStream);
     } catch (error) {
         console.error('获取媒体权限失败:', error);
-        alert('无法访问麦克风，请检查权限设置');
+        alert('无法访问麦克风，请检查权限设置并确保使用HTTPS或localhost');
+        leaveRoom();
     }
 }
 
@@ -156,8 +181,17 @@ function createPeerConnection(userId, username) {
     };
 
     connection.ontrack = (event) => {
+        console.log('接收到远程流:', username);
         peers[userId].stream = event.streams[0];
         addParticipant(userId, username, event.streams[0]);
+    };
+
+    connection.onconnectionstatechange = () => {
+        console.log('连接状态变化:', username, connection.connectionState);
+    };
+
+    connection.oniceconnectionstatechange = () => {
+        console.log('ICE连接状态:', username, connection.iceConnectionState);
     };
 
     if (localStream) {
@@ -169,7 +203,10 @@ function createPeerConnection(userId, username) {
 
 async function createOffer(userId) {
     try {
-        const offer = await peers[userId].connection.createOffer();
+        const offer = await peers[userId].connection.createOffer({
+            offerToReceiveAudio: true,
+            offerToReceiveVideo: false
+        });
         await peers[userId].connection.setLocalDescription(offer);
         
         socket.emit('offer', {
@@ -207,6 +244,12 @@ function addParticipant(userId, username, stream) {
     if (stream && userId !== socket.id) {
         const audio = participantDiv.querySelector('audio');
         audio.srcObject = stream;
+        audio.onerror = (e) => {
+            console.error('音频播放错误:', e);
+        };
+        audio.play().catch(e => {
+            console.error('音频播放失败:', e);
+        });
     }
 }
 
@@ -268,5 +311,12 @@ window.addEventListener('load', () => {
     const roomParam = urlParams.get('room');
     if (roomParam) {
         document.getElementById('roomId').value = roomParam;
+    }
+});
+
+// 处理HTTPS权限
+window.addEventListener('load', () => {
+    if (location.protocol === 'http:' && location.hostname !== 'localhost') {
+        console.warn('WebRTC需要HTTPS才能正常工作');
     }
 });
